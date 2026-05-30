@@ -3,6 +3,97 @@
 A modern, browser-based chatbot that connects to the **company LLM proxy** (`localhost:6655`).  
 Supports **Anthropic, OpenAI, Gemini, and LiteLLM** — all through the corporate proxy, no direct cloud calls.
 
+> **Repo:** https://github.com/skalmodiya/ChatBotUsingLLMProxy
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Your Machine                                 │
+│                                                                     │
+│  ┌──────────────────────────────┐                                   │
+│  │      Browser (UI)            │                                   │
+│  │   index.html                 │                                   │
+│  │                              │                                   │
+│  │  ┌──────────┐  ┌──────────┐  │                                   │
+│  │  │ Chat     │  │ Compare  │  │  Vanilla JS · No framework        │
+│  │  │ Mode     │  │ Mode     │  │  Dark-themed responsive UI        │
+│  │  └────┬─────┘  └────┬─────┘  │                                   │
+│  └───────┼─────────────┼────────┘                                   │
+│          │  HTTP/SSE   │  (localhost only, no CORS issues)          │
+│          ▼             ▼                                             │
+│  ┌──────────────────────────────┐                                   │
+│  │     Flask Server             │  server.py  · port 8080           │
+│  │                              │                                   │
+│  │  /api/models/<provider>  ────┼──► forwards GET  to proxy         │
+│  │  /api/chat/<provider>    ────┼──► forwards POST to proxy         │
+│  │  /api/sessions (CRUD)    ────┼──► reads/writes SQLite            │
+│  │                              │                                   │
+│  │  Injects:                    │                                   │
+│  │   Authorization: Bearer key  │                                   │
+│  │   anthropic-version header   │                                   │
+│  └──────────┬───────────────────┘                                   │
+│             │  Injects API Key · streams response back              │
+│             ▼                                                        │
+│  ┌──────────────────────────────┐                                   │
+│  │   Company LLM Proxy          │  localhost:6655                   │
+│  │                              │  (pre-installed on all laptops)   │
+│  │  /anthropic/v1/*             │                                   │
+│  │  /openai/v1/*                │                                   │
+│  │  /gemini/*                   │                                   │
+│  │  /litellm/v1/*               │                                   │
+│  └──────────┬───────────────────┘                                   │
+│             │  Authenticated · Policy-enforced                      │
+└─────────────┼───────────────────────────────────────────────────────┘
+              │
+              ▼  (outbound, managed by company proxy)
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Cloud LLM APIs                                 │
+│                                                                     │
+│   ┌─────────────┐  ┌─────────────┐  ┌──────────┐  ┌─────────────┐ │
+│   │  Anthropic  │  │   OpenAI    │  │  Gemini  │  │  LiteLLM    │ │
+│   │  Claude     │  │   GPT-4o    │  │  1.5 Pro │  │  (any model)│ │
+│   └─────────────┘  └─────────────┘  └──────────┘  └─────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Why this design?
+
+| Decision | Reason |
+|---|---|
+| **Flask bridge** instead of calling proxy directly from browser | Browsers block cross-origin requests (`localhost:8080` → `localhost:6655`). Flask proxies all calls server-side, eliminating CORS issues. |
+| **API key entered in UI, never in code** | Key is injected at request time by Flask. Never written to disk, never in git. |
+| **Vanilla JS, no framework** | Zero install for the frontend — just one `index.html` file served by Flask. |
+| **SQLite for history** | Lightweight, file-based, no database server needed. Each user gets their own local `chatbot.db`. |
+| **SSE streaming passthrough** | Flask pipes the proxy's `text/event-stream` response straight to the browser — no buffering — so users see tokens appear in real time. |
+
+### Request flow (single chat message)
+
+```
+User types message → [Browser]
+  → POST /api/chat/anthropic          (to Flask, port 8080)
+    → POST /anthropic/v1/messages     (Flask → proxy, port 6655)
+      → streams SSE chunks back
+    → Flask pipes chunks → Browser
+  → Browser renders tokens live
+  → On completion → POST /api/sessions/{id}/messages  (saves to SQLite)
+```
+
+### Data flow (compare mode)
+
+```
+User types prompt → [Browser]
+  → Promise.allSettled([
+      POST /api/chat/anthropic   ──► stream column 1
+      POST /api/chat/openai      ──► stream column 2
+      POST /api/chat/gemini      ──► stream column 3
+    ])
+  All fire in parallel — each column updates independently
+  → On all complete → saved as one compare session in SQLite
+```
+
 ---
 
 ## Features
@@ -34,7 +125,7 @@ Supports **Anthropic, OpenAI, Gemini, and LiteLLM** — all through the corporat
 
 ```
 1. Clone this repo
-   git clone <repo-url>
+   git clone https://github.com/skalmodiya/ChatBotUsingLLMProxy.git
    cd ChatBotUsingLLMProxy
 
 2. Double-click  start.bat
@@ -53,7 +144,7 @@ That's it. The script will:
 ## Quick Start (Mac / Linux)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/skalmodiya/ChatBotUsingLLMProxy.git
 cd ChatBotUsingLLMProxy
 chmod +x start.sh
 ./start.sh
@@ -127,7 +218,7 @@ ChatBotUsingLLMProxy/
 └── start.sh        # Mac/Linux one-click launcher
 ```
 
-The SQLite database (`chatbot.db`) is created automatically on first run and ignored by git.
+The SQLite database (`chatbot.db`) is created automatically on first run and ignored by git — each user has their own local history.
 
 ---
 
