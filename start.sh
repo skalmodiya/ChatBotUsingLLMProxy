@@ -20,11 +20,24 @@ venv/bin/pip install -q -r requirements.txt
 lsof -ti:8080 | xargs kill -9 2>/dev/null || true
 
 echo ""
-echo " Starting LLM Chatbot at http://localhost:8080"
-echo " Press Ctrl+C to stop."
+echo " How do you want to run the server?"
+echo " [F] Foreground  - keep terminal open  (press Enter for default)"
+echo " [B] Background  - no terminal window  (stop via browser)"
 echo ""
+read -t 10 -p " Choice [F/b]: " MODE || true
 
-# Open browser
-(sleep 1 && (open http://localhost:8080 2>/dev/null || xdg-open http://localhost:8080 2>/dev/null)) &
-
-venv/bin/python server.py
+if [[ "$MODE" =~ ^[Bb]$ ]]; then
+    nohup venv/bin/python server.py > server.log 2>&1 &
+    echo ""
+    echo " Server started in background (PID $!, log: server.log)"
+    echo " Use the \"Stop Server\" button in the browser to shut it down."
+    echo ""
+    (sleep 1 && (open http://localhost:8080 2>/dev/null || xdg-open http://localhost:8080 2>/dev/null)) &
+else
+    echo ""
+    echo " Starting LLM Chatbot at http://localhost:8080"
+    echo " Press Ctrl+C to stop."
+    echo ""
+    (sleep 1 && (open http://localhost:8080 2>/dev/null || xdg-open http://localhost:8080 2>/dev/null)) &
+    venv/bin/python server.py
+fi

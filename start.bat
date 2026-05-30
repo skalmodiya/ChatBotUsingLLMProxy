@@ -23,10 +23,27 @@ for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":8080 " ^| findstr "L
     taskkill /F /PID %%p >nul 2>&1
 )
 
-:: Start server and open browser
+:: Ask foreground vs background
 echo.
-echo  Starting LLM Chatbot at http://localhost:8080
-echo  Press Ctrl+C to stop.
+echo  How do you want to run the server?
+echo  [F] Foreground  - keep this terminal open  (press Enter for default)
+echo  [B] Background  - no terminal window needed (stop via browser)
 echo.
-start "" http://localhost:8080
-venv\Scripts\python.exe server.py
+set /p MODE="Choice [F/B]: "
+
+if /i "%MODE%"=="B" (
+    echo.
+    echo  Starting in background ...
+    start /B venv\Scripts\pythonw.exe server.py
+    echo  Server running at http://localhost:8080
+    echo  Use the "Stop Server" button in the browser to shut it down.
+    echo.
+    start "" http://localhost:8080
+) else (
+    echo.
+    echo  Starting LLM Chatbot at http://localhost:8080
+    echo  Press Ctrl+C to stop.
+    echo.
+    start "" http://localhost:8080
+    venv\Scripts\python.exe server.py
+)

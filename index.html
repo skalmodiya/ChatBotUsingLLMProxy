@@ -64,6 +64,9 @@
     }
     .icon-btn:hover { background: var(--surface2); color: var(--text); }
     .icon-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .icon-btn.danger { color: #e55; }
+    .icon-btn.danger:hover { background: rgba(229,85,85,.15); color: #ff6b6b; }
+    .icon-btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
     .status-dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: var(--text-muted); transition: background 0.3s; flex-shrink: 0;
@@ -585,6 +588,7 @@
   <div class="logo">💬</div>
   <h1>LLM Chatbot</h1>
   <button class="icon-btn" id="compareToggle" title="Multi-LLM compare mode">⚡ Compare</button>
+  <button class="icon-btn danger" id="stopServerBtn" title="Stop the server">⏹ Stop Server</button>
   <div class="status-dot" id="statusDot"></div>
 </header>
 
@@ -847,6 +851,7 @@ const sysPromptToggle = document.getElementById('sysPromptToggle');
 const sysPromptArea   = document.getElementById('sysPromptArea');
 const sysPromptInput  = document.getElementById('sysPromptInput');
 const compareToggle   = document.getElementById('compareToggle');
+const stopServerBtn   = document.getElementById('stopServerBtn');
 const appBody         = document.getElementById('appBody');
 const mainPanel       = document.getElementById('mainPanel');
 const compareView     = document.getElementById('compareView');
@@ -895,6 +900,17 @@ compareToggle.addEventListener('click',()=>{
     sidebar.classList.remove('open');
     sidebarBackdrop.classList.remove('open');
   }
+});
+
+// ═══════════════════════════════════════════════════
+// Stop Server
+// ═══════════════════════════════════════════════════
+stopServerBtn.addEventListener('click', async ()=>{
+  if(!confirm('Stop the server? The browser tab will become inactive.')) return;
+  try{ await fetch('/api/shutdown',{method:'POST'}); }catch(_){}
+  stopServerBtn.textContent='⏹ Stopped';
+  stopServerBtn.disabled=true;
+  setStatus('error');
 });
 
 // ═══════════════════════════════════════════════════

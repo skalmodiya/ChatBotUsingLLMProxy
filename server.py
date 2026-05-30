@@ -3,12 +3,14 @@ Local proxy bridge — avoids browser CORS restrictions.
 Forwards requests to the corporate LLM proxy at localhost:6655,
 injecting the user-supplied API key as the Authorization header.
 """
+import threading
 import requests
 from flask import Flask, request, Response, send_from_directory, jsonify
+from werkzeug.serving import make_server
 import db
 
 app = Flask(__name__)
-db.init_db()
+_server = None
 
 PROXY = "http://localhost:6655"
 
@@ -25,6 +27,16 @@ def proxy_headers(api_key):
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
+
+
+# ── Shutdown ─────────────────────────────────────────────────────────────────
+@app.route("/api/shutdown", methods=["POST"])
+def shutdown():
+    def _stop():
+        import time; time.sleep(0.3)
+        _server.shutdown()
+    threading.Thread(target=_stop, daemon=True).start()
+    return jsonify({"ok": True})
 
 
 # ── Models endpoints ────────────────────────────────────────────────────────
@@ -169,5 +181,7 @@ def append_messages(session_id):
 
 
 if __name__ == "__main__":
+    db.init_db()
+    _server = make_server("0.0.0.0", 8080, app)
     print("Starting chatbot server at http://localhost:8080")
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    _server.serve_forever()
