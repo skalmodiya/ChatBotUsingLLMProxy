@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
+  <title>LLM Chatbot</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --surface3: #2a2f47;
+      --border: #2e3250;
+      --accent: #6c63ff;
+      --accent-hover: #5a52e0;
+      --accent-soft: rgba(108,99,255,0.12);
+      --text: #e8eaf6;
+      --text-muted: #8892b0;
+      --user-bubble: #6c63ff;
+      --assistant-bubble: #22263a;
+      --error: #ff5370;
+      --error-soft: rgba(255,83,112,0.12);
+      --success: #64ffda;
+      --warn: #ffb74d;
+      --sidebar-w: 260px;
+      --radius: 12px;
+      --radius-sm: 8px;
+      /* provider brand colours */
+      --c-anthropic: #c084fc;
+      --c-openai: #34d399;
+      --c-gemini: #60a5fa;
+      --c-litellm: #fb923c;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0; z-index: 20;
+    }
+    .logo {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      border-radius: 7px; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    header h1 { font-size: 0.95rem; font-weight: 600; flex: 1; }
+    .icon-btn {
+      height: 30px; padding: 0 10px; border-radius: 6px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer;
+      display: flex; align-items: center; gap: 5px;
+      font-size: 13px; white-space: nowrap; transition: all 0.15s;
+    }
+    .icon-btn:hover { background: var(--surface2); color: var(--text); }
+    .icon-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-muted); transition: background 0.3s; flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--success); box-shadow: 0 0 5px var(--success); }
+    .status-dot.error { background: var(--error); box-shadow: 0 0 5px var(--error); }
+
+    /* ── Layout ── */
+    .app-body { flex: 1; display: flex; overflow: hidden; }
+    #compareView { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+    #compareView.active { display: flex; }
+    .app-body.compare-active .sidebar,
+    .app-body.compare-active .main { display: none; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w); flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transition: transform 0.25s ease, width 0.25s ease; z-index: 10;
+    }
+    .sidebar.collapsed { transform: translateX(calc(-1 * var(--sidebar-w))); width: 0; overflow: hidden; }
+    .sidebar-header { padding: 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .btn-new {
+      width: 100%; padding: 8px 12px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius-sm); font-size: 0.83rem; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px; justify-content: center;
+      transition: background 0.15s;
+    }
+    .btn-new:hover { background: var(--accent-hover); }
+
+    .session-list { flex: 1; overflow-y: auto; padding: 5px; }
+    .session-list::-webkit-scrollbar { width: 3px; }
+    .session-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .session-group-label {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted); padding: 8px 8px 4px; font-weight: 600;
+    }
+
+    .session-item {
+      position: relative; padding: 9px 9px 9px 11px;
+      border-radius: var(--radius-sm); cursor: pointer;
+      border-left: 3px solid transparent; transition: background 0.15s, border-color 0.15s;
+      margin-bottom: 1px;
+    }
+    .session-item:hover { background: var(--surface2); }
+    .session-item.active { background: var(--accent-soft); border-left-color: var(--accent); }
+    .session-title {
+      font-size: 0.82rem; font-weight: 500; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 22px;
+    }
+    .session-meta {
+      font-size: 0.68rem; color: var(--text-muted); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .session-preview {
+      font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 22px;
+    }
+    .session-del {
+      position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+      width: 20px; height: 20px; border-radius: 4px;
+      background: transparent; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 13px; display: none; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .session-item:hover .session-del { display: flex; }
+    .session-del:hover { background: var(--error-soft); color: var(--error); }
+
+    .sidebar-footer { padding: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .btn-clear-all {
+      width: 100%; padding: 7px; background: transparent;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text-muted); font-size: 0.78rem; cursor: pointer;
+      display: flex; align-items: center; gap: 5px; justify-content: center;
+      transition: all 0.15s;
+    }
+    .btn-clear-all:hover { border-color: var(--error); color: var(--error); background: var(--error-soft); }
+
+    /* ── Main panel ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    .controls {
+      display: flex; gap: 8px; padding: 10px 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0; flex-wrap: wrap; align-items: flex-end;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 110px; }
+    .control-group label {
+      font-size: 0.67rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600;
+    }
+    select, .api-key-wrap input {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 7px 10px; font-size: 0.84rem; outline: none;
+      transition: border-color 0.15s; width: 100%;
+    }
+    select {
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 9px center;
+      padding-right: 26px; background-color: var(--surface2);
+    }
+    select:hover, select:focus,
+    .api-key-wrap input:hover, .api-key-wrap input:focus { border-color: var(--accent); }
+    select:disabled { opacity: 0.5; cursor: not-allowed; }
+    .api-key-wrap { display: flex; }
+    .api-key-wrap input {
+      border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+      font-family: 'Cascadia Code', monospace; font-size: 0.78rem; border-right: none;
+    }
+    .eye-btn {
+      padding: 7px 9px; background: var(--surface2); color: var(--text-muted);
+      border: 1px solid var(--border); border-left: none;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      cursor: pointer; font-size: 0.78rem; transition: color 0.15s; flex-shrink: 0;
+    }
+    .eye-btn:hover { color: var(--text); }
+
+    .sys-prompt-toggle {
+      width: 100%; padding: 6px 10px;
+      background: transparent; border: 1px dashed var(--border);
+      border-radius: var(--radius-sm); color: var(--text-muted);
+      font-size: 0.76rem; cursor: pointer; text-align: left;
+      transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+    }
+    .sys-prompt-toggle:hover { border-color: var(--accent); color: var(--text); }
+    .sys-prompt-toggle .arrow { transition: transform 0.2s; font-style: normal; }
+    .sys-prompt-toggle.open .arrow { transform: rotate(90deg); }
+    .sys-prompt-area {
+      display: none; padding: 8px 16px 10px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .sys-prompt-area.open { display: block; }
+    .sys-prompt-area textarea {
+      width: 100%; min-height: 60px; max-height: 130px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 8px 10px; font-size: 0.82rem; font-family: inherit;
+      resize: vertical; outline: none; transition: border-color 0.15s;
+    }
+    .sys-prompt-area textarea:focus { border-color: var(--accent); }
+    .sys-prompt-area label {
+      display: block; font-size: 0.67rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px;
+    }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1; overflow-y: auto; padding: 18px;
+      display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth;
+    }
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .message { display: flex; gap: 9px; max-width: 860px; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+    .message.user      { flex-direction: row-reverse; align-self: flex-end; }
+    .message.assistant { align-self: flex-start; }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .message.user .avatar      { background: var(--user-bubble); }
+    .message.assistant .avatar { background: var(--surface2); border: 1px solid var(--border); }
+    .msg-col { display: flex; flex-direction: column; min-width: 0; }
+    .bubble {
+      padding: 10px 14px; border-radius: var(--radius);
+      font-size: 0.88rem; line-height: 1.65; word-break: break-word;
+    }
+    .message.user .bubble { background: var(--user-bubble); color: #fff; border-bottom-right-radius: 4px; }
+    .message.assistant .bubble { background: var(--assistant-bubble); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble.error-bubble { color: var(--error); }
+    .bubble pre { background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 7px 0; font-size: 0.78rem; }
+    .bubble code { font-family: 'Cascadia Code','Fira Code','Consolas',monospace; }
+    .bubble p { margin-bottom: 7px; } .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { padding-left: 18px; margin: 5px 0; }
+    .bubble li { margin: 2px 0; }
+
+    .msg-footer { display: flex; align-items: center; gap: 7px; margin-top: 3px; padding: 0 2px; flex-wrap: wrap; }
+    .message.user .msg-footer { justify-content: flex-end; }
+    .msg-time { font-size: 0.67rem; color: var(--text-muted); }
+
+    /* Model badge */
+    .model-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 7px; border-radius: 20px;
+      font-size: 0.67rem; font-weight: 600; letter-spacing: 0.02em;
+      border: 1px solid; white-space: nowrap;
+    }
+    .model-badge .badge-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+    .badge-anthropic { color: var(--c-anthropic); border-color: rgba(192,132,252,0.35); background: rgba(192,132,252,0.08); }
+    .badge-anthropic .badge-dot { background: var(--c-anthropic); }
+    .badge-openai    { color: var(--c-openai);    border-color: rgba(52,211,153,0.35);  background: rgba(52,211,153,0.08); }
+    .badge-openai    .badge-dot { background: var(--c-openai); }
+    .badge-gemini    { color: var(--c-gemini);    border-color: rgba(96,165,250,0.35);  background: rgba(96,165,250,0.08); }
+    .badge-gemini    .badge-dot { background: var(--c-gemini); }
+    .badge-litellm   { color: var(--c-litellm);   border-color: rgba(251,146,60,0.35);  background: rgba(251,146,60,0.08); }
+    .badge-litellm   .badge-dot { background: var(--c-litellm); }
+    .badge-unknown   { color: var(--text-muted);  border-color: var(--border); background: transparent; }
+    .badge-unknown   .badge-dot { background: var(--text-muted); }
+
+    .copy-btn {
+      padding: 2px 6px; background: transparent;
+      border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-muted); font-size: 0.67rem; cursor: pointer;
+      opacity: 0; transition: opacity 0.15s, color 0.15s;
+    }
+    .message.assistant:hover .copy-btn { opacity: 1; }
+    .copy-btn:hover { color: var(--success); border-color: var(--success); }
+    .copy-btn.copied { color: var(--success); border-color: var(--success); opacity: 1; }
+
+    /* Response time chip */
+    .resp-time {
+      font-size: 0.67rem; color: var(--text-muted);
+      padding: 2px 6px; border-radius: 4px;
+      border: 1px solid var(--border); background: transparent; white-space: nowrap;
+    }
+
+    /* Thinking block */
+    .thinking-block {
+      margin-bottom: 6px; border-radius: var(--radius-sm);
+      border: 1px solid rgba(108,99,255,0.3); overflow: hidden;
+    }
+    .thinking-toggle {
+      width: 100%; display: flex; align-items: center; gap: 6px;
+      padding: 7px 10px; background: rgba(108,99,255,0.07);
+      border: none; cursor: pointer; color: var(--text-muted); font-size: 0.78rem;
+      text-align: left; transition: background 0.15s;
+    }
+    .thinking-toggle:hover { background: rgba(108,99,255,0.14); color: var(--text); }
+    .thinking-toggle .th-arrow { transition: transform 0.2s; font-style: normal; font-size: 10px; }
+    .thinking-toggle.open .th-arrow { transform: rotate(90deg); }
+    .thinking-toggle .th-label { flex: 1; }
+    .thinking-toggle .th-len { font-size: 0.65rem; opacity: 0.7; }
+    .thinking-body {
+      display: none; padding: 10px 12px;
+      font-size: 0.8rem; line-height: 1.6; color: var(--text-muted);
+      background: rgba(108,99,255,0.04);
+      border-top: 1px solid rgba(108,99,255,0.2);
+      max-height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    .thinking-body::-webkit-scrollbar { width: 3px; }
+    .thinking-body::-webkit-scrollbar-thumb { background: var(--border); }
+    .thinking-toggle.open + .thinking-body { display: block; }
+    .thinking-streaming { color: var(--accent); font-size: 0.72rem; }
+
+    /* Typing */
+    .typing-indicator { display: flex; gap: 4px; padding: 10px 14px; }
+    .typing-indicator span { width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+    /* Empty */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .empty-state .icon { font-size: 42px; opacity: 0.35; }
+    .empty-state h2 { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+    .empty-state p { font-size: 0.83rem; max-width: 300px; }
+
+    /* ── Input area ── */
+    .input-area { padding: 11px 16px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+    .input-row {
+      display: flex; gap: 7px; align-items: flex-end;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 6px 6px 6px 13px; transition: border-color 0.15s;
+    }
+    .input-row:focus-within { border-color: var(--accent); }
+    textarea.chat-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-family: inherit; font-size: 0.88rem;
+      line-height: 1.5; resize: none; min-height: 22px; max-height: 150px;
+      overflow-y: auto; padding: 4px 0;
+    }
+    textarea.chat-input::placeholder { color: var(--text-muted); }
+    .send-btn {
+      width: 32px; height: 32px; border-radius: 7px; border: none; color: #fff;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.15s, transform 0.1s;
+    }
+    .send-btn.go { background: var(--accent); }
+    .send-btn.go:hover:not(:disabled) { background: var(--accent-hover); }
+    .send-btn.go:active:not(:disabled) { transform: scale(0.92); }
+    .send-btn.go:disabled { opacity: 0.4; cursor: not-allowed; }
+    .send-btn.stop { background: var(--error); }
+    .send-btn.stop:hover { background: #e0334a; }
+    .input-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 4px; font-size: 0.68rem; color: var(--text-muted);
+    }
+    #tokenCount.warn { color: var(--warn); }
+
+    /* ── COMPARE VIEW ── */
+    .cmp-toolbar {
+      display: flex; gap: 8px; padding: 10px 16px; flex-wrap: wrap; align-items: flex-end;
+      background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .cmp-toolbar .control-group { min-width: 160px; }
+
+    .cmp-models-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+      padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .cmp-models-label { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+
+    .model-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px 4px 8px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 500; border: 1px solid;
+      cursor: default; white-space: nowrap;
+    }
+    .model-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .model-pill .pill-remove { background: none; border: none; cursor: pointer; color: inherit; opacity: 0.6; font-size: 14px; padding: 0; line-height: 1; margin-left: 2px; }
+    .model-pill .pill-remove:hover { opacity: 1; }
+    .pill-anthropic { color: var(--c-anthropic); border-color: rgba(192,132,252,0.4); background: rgba(192,132,252,0.1); }
+    .pill-anthropic .pill-dot { background: var(--c-anthropic); }
+    .pill-openai    { color: var(--c-openai);    border-color: rgba(52,211,153,0.4);  background: rgba(52,211,153,0.1); }
+    .pill-openai    .pill-dot { background: var(--c-openai); }
+    .pill-gemini    { color: var(--c-gemini);    border-color: rgba(96,165,250,0.4);  background: rgba(96,165,250,0.1); }
+    .pill-gemini    .pill-dot { background: var(--c-gemini); }
+    .pill-litellm   { color: var(--c-litellm);   border-color: rgba(251,146,60,0.4);  background: rgba(251,146,60,0.1); }
+    .pill-litellm   .pill-dot { background: var(--c-litellm); }
+
+    /* Add model picker */
+    .add-model-wrap { position: relative; }
+    .btn-add-model {
+      padding: 4px 11px; border-radius: 20px;
+      background: transparent; border: 1px dashed var(--border);
+      color: var(--text-muted); font-size: 0.78rem; cursor: pointer;
+      display: flex; align-items: center; gap: 5px; transition: all 0.15s;
+    }
+    .btn-add-model:hover { border-color: var(--accent); color: var(--accent); }
+
+    .model-picker {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); width: 260px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none;
+    }
+    .model-picker.open { display: block; }
+    .picker-header {
+      padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid var(--border);
+    }
+    .picker-provider { display: flex; flex-direction: column; }
+    .picker-prov-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: none; border: none;
+      color: var(--text); font-size: 0.84rem; cursor: pointer; text-align: left;
+      border-bottom: 1px solid var(--border); transition: background 0.1s;
+    }
+    .picker-prov-btn:last-child { border-bottom: none; }
+    .picker-prov-btn:hover { background: var(--surface2); }
+    .picker-prov-btn .prov-arrow { color: var(--text-muted); font-size: 11px; }
+    .picker-models {
+      padding: 4px; max-height: 200px; overflow-y: auto; display: none;
+    }
+    .picker-models.open { display: block; }
+    .picker-models::-webkit-scrollbar { width: 3px; }
+    .picker-models::-webkit-scrollbar-thumb { background: var(--border); }
+    .picker-model-btn {
+      width: 100%; padding: 6px 10px; background: none; border: none;
+      color: var(--text); font-size: 0.82rem; cursor: pointer; text-align: left;
+      border-radius: 4px; transition: background 0.1s; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .picker-model-btn:hover { background: var(--surface2); }
+    .picker-model-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .picker-loading { padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+
+    /* Column grid */
+    #compareGrid {
+      flex: 1; display: flex; overflow-x: auto; overflow-y: hidden; gap: 0;
+    }
+    #compareGrid::-webkit-scrollbar { height: 4px; }
+    #compareGrid::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .compare-col {
+      flex: 1; min-width: 280px; max-width: 600px;
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+    .compare-col:last-child { border-right: none; }
+    .compare-col:only-child { max-width: 100%; }
+
+    .col-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 12px; background: var(--surface);
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .col-provider-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .col-info { flex: 1; min-width: 0; }
+    .col-provider-name { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .col-model-name { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-status { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .col-status.streaming { color: var(--accent); }
+    .col-status.done { color: var(--success); }
+    .col-status.error { color: var(--error); }
+    .col-copy-all {
+      padding: 3px 8px; background: transparent; border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text-muted); font-size: 0.68rem; cursor: pointer;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .col-copy-all:hover { border-color: var(--success); color: var(--success); }
+
+    .col-messages {
+      flex: 1; overflow-y: auto; padding: 14px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .col-messages::-webkit-scrollbar { width: 3px; }
+    .col-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* compare message bubble (simpler, no avatar) */
+    .cmp-msg { display: flex; flex-direction: column; gap: 3px; }
+    .cmp-msg.user .bubble { background: var(--user-bubble); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .cmp-msg.assistant .bubble { background: var(--assistant-bubble); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 4px; }
+    .cmp-role { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+    .cmp-msg.user .cmp-role { text-align: right; }
+
+    .cmp-empty {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted); font-size: 0.82rem; text-align: center; padding: 20px;
+    }
+    .no-columns-msg {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .no-columns-msg .icon { font-size: 40px; opacity: 0.3; }
+    .no-columns-msg h3 { font-size: 1rem; font-weight: 600; color: var(--text); }
+    .no-columns-msg p { font-size: 0.82rem; max-width: 280px; }
+
+    /* Compare input */
+    .cmp-input-area {
+      padding: 10px 16px; background: var(--surface);
+      border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .cmp-input-row {
+      display: flex; gap: 7px; align-items: flex-end;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 6px 6px 6px 13px; transition: border-color 0.15s;
+    }
+    .cmp-input-row:focus-within { border-color: var(--accent); }
+    .cmp-send-btn {
+      padding: 0 14px; height: 32px; border-radius: 7px; border: none; color: #fff;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      font-size: 0.82rem; font-weight: 600; white-space: nowrap;
+      transition: background 0.15s; flex-shrink: 0;
+    }
+    .cmp-send-btn.go { background: var(--accent); }
+    .cmp-send-btn.go:hover:not(:disabled) { background: var(--accent-hover); }
+    .cmp-send-btn.go:disabled { opacity: 0.4; cursor: not-allowed; }
+    .cmp-send-btn.stop { background: var(--error); }
+    .cmp-send-btn.stop:hover { background: #e0334a; }
+    .cmp-footer {
+      display: flex; justify-content: space-between;
+      margin-top: 4px; font-size: 0.68rem; color: var(--text-muted);
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px; width: 330px; max-width: 90vw;
+      transform: scale(0.95); transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 7px; }
+    .modal p { font-size: 0.83rem; color: var(--text-muted); margin-bottom: 18px; }
+    .modal-btns { display: flex; gap: 7px; justify-content: flex-end; }
+    .modal-btns button { padding: 7px 14px; border-radius: var(--radius-sm); font-size: 0.83rem; cursor: pointer; border: 1px solid var(--border); transition: all 0.15s; }
+    .modal-cancel { background: transparent; color: var(--text-muted); }
+    .modal-cancel:hover { color: var(--text); }
+    .modal-confirm { background: var(--error); color: #fff; border-color: var(--error); }
+    .modal-confirm:hover { background: #e0334a; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 68px; left: 50%;
+      transform: translateX(-50%) translateY(14px);
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+      padding: 8px 15px; border-radius: var(--radius-sm);
+      font-size: 0.8rem; opacity: 0; transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none; z-index: 300; max-width: 90vw; text-align: center;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.error   { background: var(--error); border-color: var(--error); color: #fff; }
+    #toast.success { border-color: var(--success); color: var(--success); }
+
+    /* ── Sidebar backdrop (mobile) ── */
+    .sidebar-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9; }
+
+    @media (max-width: 680px) {
+      .sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(calc(-1 * var(--sidebar-w))); z-index: 15; }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-backdrop.open { display: block; }
+      .controls, .cmp-toolbar { flex-wrap: wrap; padding: 7px; }
+      .control-group { min-width: 90px; }
+      #messages, .col-messages { padding: 10px; }
+      .input-area, .cmp-input-area { padding: 7px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <button class="icon-btn" id="sidebarToggle">☰</button>
+  <div class="logo">💬</div>
+  <h1>LLM Chatbot</h1>
+  <button class="icon-btn" id="compareToggle" title="Multi-LLM compare mode">⚡ Compare</button>
+  <div class="status-dot" id="statusDot"></div>
+</header>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="app-body" id="appBody">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <button class="btn-new" id="newChatBtn">＋ New Chat</button>
+    </div>
+    <div class="session-list" id="sessionList">
+      <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.78rem;">Loading…</div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="btn-clear-all" id="clearAllBtn">🗑 Clear All History</button>
+    </div>
+  </aside>
+
+  <!-- ── Main chat ── -->
+  <div class="main" id="mainPanel">
+    <div class="controls">
+      <div class="control-group" style="min-width:165px;flex:2;">
+        <label>API Key</label>
+        <div class="api-key-wrap">
+          <input type="password" id="apiKeyInput" placeholder="Proxy API key…" autocomplete="off" />
+          <button class="eye-btn" id="toggleKey">👁</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <label>Provider</label>
+        <select id="providerSelect">
+          <option value="">— select —</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          <option value="litellm">LiteLLM</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Model</label>
+        <select id="modelSelect" disabled><option value="">— select —</option></select>
+      </div>
+      <div class="control-group" style="min-width:auto;flex:0;">
+        <label>&nbsp;</label>
+        <button class="sys-prompt-toggle" id="sysPromptToggle"><em class="arrow">▶</em> System prompt</button>
+      </div>
+    </div>
+    <div class="sys-prompt-area" id="sysPromptArea">
+      <label>System Prompt</label>
+      <textarea id="sysPromptInput" placeholder="You are a helpful assistant…"></textarea>
+    </div>
+    <div id="messages">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🤖</div>
+        <h2>Ready to chat</h2>
+        <p>Enter your API key, choose a provider and model, then start a conversation.</p>
+      </div>
+    </div>
+    <div class="input-area">
+      <div class="input-row">
+        <textarea class="chat-input" id="userInput" placeholder="Type a message… (Shift+Enter for newline)" rows="1"></textarea>
+        <button class="send-btn go" id="sendBtn" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+        <button class="send-btn stop" id="stopBtn" style="display:none;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+        </button>
+      </div>
+      <div class="input-footer">
+        <span id="modelLabel">No model selected</span>
+        <span id="tokenCount">~0 tokens</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Compare view ── -->
+  <div id="compareView">
+    <div class="cmp-toolbar">
+      <div class="control-group" style="min-width:165px;flex:2;">
+        <label>API Key (shared)</label>
+        <div class="api-key-wrap">
+          <input type="password" id="cmpApiKey" placeholder="Same proxy API key…" autocomplete="off" />
+          <button class="eye-btn" id="cmpToggleKey">👁</button>
+        </div>
+      </div>
+      <div class="control-group" style="flex:3;">
+        <label>System Prompt (optional, applied to all)</label>
+        <input type="text" id="cmpSysPrompt" placeholder="You are a helpful assistant…" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;font-size:0.84rem;outline:none;width:100%;" />
+      </div>
+    </div>
+    <div class="cmp-models-row">
+      <span class="cmp-models-label">Models:</span>
+      <div id="cmpPills"></div>
+      <div class="add-model-wrap" id="addModelWrap">
+        <button class="btn-add-model" id="addModelBtn">＋ Add Model</button>
+        <div class="model-picker" id="modelPicker">
+          <div class="picker-header">Select Provider → Model</div>
+          <div id="pickerContent"></div>
+        </div>
+      </div>
+    </div>
+    <div id="compareGrid">
+      <div class="no-columns-msg" id="noColumnsMsg">
+        <div class="icon">⚡</div>
+        <h3>Add models to compare</h3>
+        <p>Click "+ Add Model" above to add LLMs. You can add up to 4 at once.</p>
+      </div>
+    </div>
+    <div class="cmp-input-area">
+      <div class="cmp-input-row">
+        <textarea class="chat-input" id="cmpInput" placeholder="Type a prompt to send to all selected models…" rows="1"></textarea>
+        <button class="cmp-send-btn go" id="cmpSendBtn" disabled>⚡ Send to all</button>
+        <button class="cmp-send-btn stop" id="cmpStopBtn" style="display:none;">■ Stop all</button>
+      </div>
+      <div class="cmp-footer">
+        <span id="cmpStatus">Add models above to begin comparing</span>
+        <span id="cmpTokenCount">~0 tokens</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app-body -->
+
+<!-- Confirm modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Confirm</h3>
+    <p id="modalBody">Are you sure?</p>
+    <div class="modal-btns">
+      <button class="modal-cancel" id="modalCancel">Cancel</button>
+      <button class="modal-confirm" id="modalConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// Provider config
+// ═══════════════════════════════════════════════════
+const PROVIDERS = {
+  anthropic: { label: 'Anthropic', parseModels: d => (d.data||[]).map(m=>({id:m.id,name:m.id})), chat: chatAnthropic },
+  openai:    { label: 'OpenAI',    parseModels: d => (d.data||[]).map(m=>({id:m.id,name:m.id})), chat: (m,msgs,sys,k,cb,sig)=>chatOpenAI('openai',m,msgs,sys,k,cb,sig) },
+  gemini:    { label: 'Gemini',    parseModels: d => (d.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>{const id=m.name.replace('models/','');return{id,name:m.displayName||id};}), chat: chatGemini },
+  litellm:   { label: 'LiteLLM',  parseModels: d => (d.data||[]).map(m=>({id:m.id,name:m.id})), chat: (m,msgs,sys,k,cb,sig)=>chatOpenAI('litellm',m,msgs,sys,k,cb,sig) },
+};
+const PROVIDER_COLORS = { anthropic:'var(--c-anthropic)', openai:'var(--c-openai)', gemini:'var(--c-gemini)', litellm:'var(--c-litellm)' };
+
+function apiHeaders(key){ return {'Content-Type':'application/json','X-Api-Key':key}; }
+async function errorText(res){ try{const j=await res.json();return j.error?.message||j.error||j.message||JSON.stringify(j);}catch{return `HTTP ${res.status} ${res.statusText}`;} }
+
+// onChunk(text, thinkingText) — thinkingText may be null
+async function chatAnthropic(model,messages,sysPrompt,key,onChunk,signal){
+  const body={model,max_tokens:4096,stream:true,messages:messages.map(m=>({role:m.role,content:m.content}))};
+  if(sysPrompt) body.system=sysPrompt;
+  const res=await fetch('/api/chat/anthropic',{method:'POST',headers:apiHeaders(key),body:JSON.stringify(body),signal});
+  if(!res.ok) throw new Error(await errorText(res));
+  return streamSSEAnthropicFull(res,onChunk);
+}
+async function chatOpenAI(provider,model,messages,sysPrompt,key,onChunk,signal){
+  const msgs=sysPrompt?[{role:'system',content:sysPrompt},...messages]:messages;
+  const res=await fetch(`/api/chat/${provider}`,{method:'POST',headers:apiHeaders(key),signal,body:JSON.stringify({model,messages:msgs,stream:true})});
+  if(!res.ok) throw new Error(await errorText(res));
+  return streamSSE(res,(full,thinking)=>onChunk(full,thinking),c=>{
+    const delta=c?.choices?.[0]?.delta||{};
+    return{text:delta.content||'', thinking:delta.reasoning_content||''};
+  });
+}
+async function chatGemini(model,messages,sysPrompt,key,onChunk,signal){
+  const contents=messages.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
+  const body={model,contents};
+  if(sysPrompt) body.system_instruction={parts:[{text:sysPrompt}]};
+  const res=await fetch('/api/chat/gemini',{method:'POST',headers:apiHeaders(key),body:JSON.stringify(body),signal});
+  if(!res.ok) throw new Error(await errorText(res));
+  const json=await res.json();
+  const text=json.candidates?.[0]?.content?.parts?.map(p=>p.text).join('')||'';
+  const thinking=json.candidates?.[0]?.content?.parts?.filter(p=>p.thought).map(p=>p.text).join('')||'';
+  onChunk(text,thinking||null); return text;
+}
+
+// Generic SSE streamer — extract must return {text, thinking}
+async function streamSSE(res,onChunk,extract){
+  const reader=res.body.getReader(); const dec=new TextDecoder();
+  let full='',fullThinking='',buf='';
+  while(true){
+    const{done,value}=await reader.read(); if(done) break;
+    buf+=dec.decode(value,{stream:true});
+    const lines=buf.split('\n'); buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data: ')) continue;
+      const raw=line.slice(6).trim(); if(raw==='[DONE]') continue;
+      try{
+        const{text,thinking}=extract(JSON.parse(raw));
+        if(text){full+=text;}
+        if(thinking){fullThinking+=thinking;}
+        if(text||thinking) onChunk(full,fullThinking||null);
+      }catch{}
+    }
+  }
+  return full;
+}
+
+// Anthropic-specific SSE — handles thinking blocks separately
+async function streamSSEAnthropicFull(res,onChunk){
+  const reader=res.body.getReader(); const dec=new TextDecoder();
+  let full='',fullThinking='',buf='',inThinking=false;
+  while(true){
+    const{done,value}=await reader.read(); if(done) break;
+    buf+=dec.decode(value,{stream:true});
+    const lines=buf.split('\n'); buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data: ')) continue;
+      const raw=line.slice(6).trim(); if(raw==='[DONE]') continue;
+      try{
+        const ev=JSON.parse(raw);
+        if(ev.type==='content_block_start'){
+          inThinking=ev.content_block?.type==='thinking';
+        } else if(ev.type==='content_block_delta'){
+          const d=ev.delta;
+          if(d?.type==='thinking_delta'&&d.thinking){fullThinking+=d.thinking; onChunk(full,fullThinking);}
+          else if(d?.type==='text_delta'&&d.text){full+=d.text; onChunk(full,fullThinking||null);}
+        }
+      }catch{}
+    }
+  }
+  return full;
+}
+
+// ═══════════════════════════════════════════════════
+// Chat state
+// ═══════════════════════════════════════════════════
+let provider='',model='',history=[],isLoading=false;
+let currentSessionId=null, abortController=null;
+
+// ═══════════════════════════════════════════════════
+// DOM refs — chat
+// ═══════════════════════════════════════════════════
+const providerSelect  = document.getElementById('providerSelect');
+const modelSelect     = document.getElementById('modelSelect');
+const apiKeyInput     = document.getElementById('apiKeyInput');
+const toggleKey       = document.getElementById('toggleKey');
+const messagesEl      = document.getElementById('messages');
+const emptyState      = document.getElementById('emptyState');
+const userInput       = document.getElementById('userInput');
+const sendBtn         = document.getElementById('sendBtn');
+const stopBtn         = document.getElementById('stopBtn');
+const modelLabel      = document.getElementById('modelLabel');
+const statusDot       = document.getElementById('statusDot');
+const tokenCount      = document.getElementById('tokenCount');
+const sessionList     = document.getElementById('sessionList');
+const newChatBtn      = document.getElementById('newChatBtn');
+const clearAllBtn     = document.getElementById('clearAllBtn');
+const sidebar         = document.getElementById('sidebar');
+const sidebarToggle   = document.getElementById('sidebarToggle');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const sysPromptToggle = document.getElementById('sysPromptToggle');
+const sysPromptArea   = document.getElementById('sysPromptArea');
+const sysPromptInput  = document.getElementById('sysPromptInput');
+const compareToggle   = document.getElementById('compareToggle');
+const appBody         = document.getElementById('appBody');
+const mainPanel       = document.getElementById('mainPanel');
+const compareView     = document.getElementById('compareView');
+
+// ── Compare DOM refs (declared here to avoid TDZ errors in Init block below) ──
+const cmpApiKey      = document.getElementById('cmpApiKey');
+const cmpToggleKey   = document.getElementById('cmpToggleKey');
+const cmpSysPrompt   = document.getElementById('cmpSysPrompt');
+const cmpPills       = document.getElementById('cmpPills');
+const addModelBtn    = document.getElementById('addModelBtn');
+const modelPicker    = document.getElementById('modelPicker');
+const pickerContent  = document.getElementById('pickerContent');
+const compareGrid    = document.getElementById('compareGrid');
+const noColumnsMsg   = document.getElementById('noColumnsMsg');
+const cmpInput       = document.getElementById('cmpInput');
+const cmpSendBtn     = document.getElementById('cmpSendBtn');
+const cmpStopBtn     = document.getElementById('cmpStopBtn');
+const cmpStatus      = document.getElementById('cmpStatus');
+const cmpTokenCount  = document.getElementById('cmpTokenCount');
+
+// ═══════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════
+if(sessionStorage.getItem('llm_api_key')){
+  const k=sessionStorage.getItem('llm_api_key');
+  apiKeyInput.value=k; cmpApiKey.value=k;
+  // Auto-load first provider
+  providerSelect.value='anthropic';
+  providerSelect.dispatchEvent(new Event('change'));
+}
+loadSessionList();
+
+// ═══════════════════════════════════════════════════
+// Compare toggle
+// ═══════════════════════════════════════════════════
+let compareMode=false;
+compareToggle.addEventListener('click',()=>{
+  compareMode=!compareMode;
+  compareToggle.classList.toggle('active',compareMode);
+  compareToggle.textContent=compareMode?'✕ Exit Compare':'⚡ Compare';
+  appBody.classList.toggle('compare-active',compareMode);
+  compareView.classList.toggle('active',compareMode);
+  if(compareMode){
+    // sync API key
+    cmpApiKey.value=apiKeyInput.value;
+    sidebar.classList.remove('open');
+    sidebarBackdrop.classList.remove('open');
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// Sidebar
+// ═══════════════════════════════════════════════════
+sidebarToggle.addEventListener('click',()=>{
+  if(compareMode) return;
+  const mobile=window.innerWidth<=680;
+  if(mobile){sidebar.classList.toggle('open');sidebarBackdrop.classList.toggle('open');}
+  else{sidebar.classList.toggle('collapsed');}
+});
+sidebarBackdrop.addEventListener('click',()=>{ sidebar.classList.remove('open'); sidebarBackdrop.classList.remove('open'); });
+sysPromptToggle.addEventListener('click',()=>{ sysPromptToggle.classList.toggle('open'); sysPromptArea.classList.toggle('open'); });
+
+// ═══════════════════════════════════════════════════
+// API key sync
+// ═══════════════════════════════════════════════════
+function syncKey(val){
+  sessionStorage.setItem('llm_api_key',val); apiKeyInput.value=val; cmpApiKey.value=val;
+  updateSendBtn(); updateCmpSendBtn();
+  // Auto-load first provider if none selected yet
+  if(val.trim()&&!provider){
+    providerSelect.value='anthropic';
+    providerSelect.dispatchEvent(new Event('change'));
+  }
+}
+apiKeyInput.addEventListener('input',()=>syncKey(apiKeyInput.value));
+cmpApiKey.addEventListener('input',()=>syncKey(cmpApiKey.value));
+toggleKey.addEventListener('click',()=>{ apiKeyInput.type=apiKeyInput.type==='password'?'text':'password'; });
+cmpToggleKey.addEventListener('click',()=>{ cmpApiKey.type=cmpApiKey.type==='password'?'text':'password'; });
+
+// ═══════════════════════════════════════════════════
+// Provider / model (chat)
+// ═══════════════════════════════════════════════════
+providerSelect.addEventListener('change',async()=>{
+  provider=providerSelect.value; model='';
+  modelSelect.innerHTML='<option value="">Loading…</option>'; modelSelect.disabled=true; updateSendBtn();
+  if(!provider){modelSelect.innerHTML='<option value="">— select —</option>';return;}
+  const key=apiKeyInput.value.trim();
+  if(!key){showToast('Enter your API key first','error');modelSelect.innerHTML='<option value="">— select —</option>';return;}
+  try{
+    const res=await fetch(`/api/models/${provider}`,{headers:{'X-Api-Key':key}});
+    if(!res.ok) throw new Error(await errorText(res));
+    const models=PROVIDERS[provider].parseModels(await res.json());
+    modelSelect.innerHTML='';
+    models.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name;modelSelect.appendChild(o);});
+    if(models.length){
+      modelSelect.disabled=false;
+      // Auto-select first model
+      modelSelect.value=models[0].id;
+      modelSelect.dispatchEvent(new Event('change'));
+    } else {
+      modelSelect.innerHTML='<option value="">No models found</option>';
+    }
+    setStatus('connected');
+  }catch(e){modelSelect.innerHTML='<option value="">Failed to load</option>';showToast(`Models: ${e.message}`,'error');setStatus('error');}
+});
+modelSelect.addEventListener('change',()=>{
+  model=modelSelect.value;
+  modelLabel.textContent=model?`${PROVIDERS[provider]?.label} · ${model}`:'No model selected';
+  updateSendBtn();
+});
+
+// ═══════════════════════════════════════════════════
+// New / Clear chat
+// ═══════════════════════════════════════════════════
+newChatBtn.addEventListener('click',startNewChat);
+function startNewChat(){
+  currentSessionId=null; history=[];
+  messagesEl.innerHTML=''; messagesEl.appendChild(emptyState);
+  sysPromptInput.value='';
+  document.querySelectorAll('.session-item').forEach(el=>el.classList.remove('active'));
+  if(window.innerWidth<=680){sidebar.classList.remove('open');sidebarBackdrop.classList.remove('open');}
+  userInput.focus();
+}
+
+clearAllBtn.addEventListener('click',()=>{
+  confirmDialog('Delete All History','This will permanently delete all chat sessions. This cannot be undone.',async()=>{
+    await fetch('/api/sessions',{method:'DELETE'});
+    startNewChat();
+    sessionList.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.78rem;">No history yet</div>';
+    showToast('All history cleared','success');
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// Session list
+// ═══════════════════════════════════════════════════
+async function loadSessionList(){
+  try{
+    const sessions=await fetch('/api/sessions').then(r=>r.json());
+    renderSessionList(sessions);
+  }catch{
+    sessionList.innerHTML='<div style="padding:14px;text-align:center;color:var(--text-muted);font-size:0.76rem;">Could not load history</div>';
+  }
+}
+
+function renderSessionList(sessions){
+  if(!sessions.length){
+    sessionList.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.78rem;">No history yet</div>';
+    return;
+  }
+  sessionList.innerHTML='';
+  const chats=sessions.filter(s=>!s.is_compare);
+  const compares=sessions.filter(s=>s.is_compare);
+  if(chats.length){
+    sessionList.insertAdjacentHTML('beforeend','<div class="session-group-label">Chats</div>');
+    chats.forEach(s=>sessionList.appendChild(buildSessionItem(s)));
+  }
+  if(compares.length){
+    sessionList.insertAdjacentHTML('beforeend','<div class="session-group-label">⚡ Compares</div>');
+    compares.forEach(s=>sessionList.appendChild(buildSessionItem(s)));
+  }
+}
+
+function buildSessionItem(s){
+  const item=document.createElement('div');
+  item.className='session-item'+(s.id===currentSessionId?' active':'');
+  item.dataset.id=s.id;
+  const icon=s.is_compare?'⚡ ':'';
+  item.innerHTML=`
+    <div class="session-title">${icon}${escHtml(s.title||'Untitled')}</div>
+    <div class="session-meta">${escHtml([s.provider,s.model?s.model.split('/').pop():''].filter(Boolean).join(' · '))} · ${relativeTime(s.updated_at)}</div>
+    <div class="session-preview">${escHtml(s.preview||'')}</div>
+    <button class="session-del" title="Delete">×</button>`;
+  item.querySelector('.session-del').addEventListener('click',async e=>{
+    e.stopPropagation();
+    confirmDialog('Delete Session',`Delete "${s.title||'Untitled'}"?`,async()=>{
+      await fetch(`/api/sessions/${s.id}`,{method:'DELETE'});
+      item.remove();
+      if(!sessionList.querySelectorAll('.session-item').length)
+        sessionList.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.78rem;">No history yet</div>';
+      if(currentSessionId===s.id) startNewChat();
+    });
+  });
+  item.addEventListener('click',()=>{ if(s.is_compare) loadCompareSession(s.id); else loadSession(s.id); });
+  return item;
+}
+
+async function loadSession(sessionId){
+  try{
+    const data=await fetch(`/api/sessions/${sessionId}`).then(r=>r.json());
+    const{session,messages}=data;
+    currentSessionId=sessionId; history=messages.map(m=>({role:m.role,content:m.content}));
+    if(session.provider&&session.provider!==provider){
+      providerSelect.value=session.provider;
+      await providerSelect.dispatchEvent(new Event('change'));
+      await new Promise(r=>setTimeout(r,600));
+    }
+    if(session.model){modelSelect.value=session.model;modelSelect.dispatchEvent(new Event('change'));}
+    sysPromptInput.value=session.system_prompt||'';
+    if(session.system_prompt){sysPromptToggle.classList.add('open');sysPromptArea.classList.add('open');}
+    messagesEl.innerHTML='';
+    if(!messages.length){messagesEl.appendChild(emptyState);}
+    else{
+      messages.forEach(m=>{
+        const badge=m.provider?makeBadge(m.provider,m.model||session.model):null;
+        const{wrap}=renderMessage(m.role,m.content,{badge});
+        messagesEl.appendChild(wrap);
+      });
+      messagesEl.lastElementChild?.scrollIntoView({block:'end'});
+    }
+    document.querySelectorAll('.session-item').forEach(el=>el.classList.toggle('active',el.dataset.id===sessionId));
+    if(window.innerWidth<=680){sidebar.classList.remove('open');sidebarBackdrop.classList.remove('open');}
+    if(compareMode){compareMode=false;compareToggle.classList.remove('active');compareToggle.textContent='⚡ Compare';appBody.classList.remove('compare-active');compareView.classList.remove('active');}
+  }catch(e){showToast(`Could not load session: ${e.message}`,'error');}
+}
+
+// ═══════════════════════════════════════════════════
+// Send (chat)
+// ═══════════════════════════════════════════════════
+sendBtn.addEventListener('click',sendMessage);
+stopBtn.addEventListener('click',()=>{if(abortController)abortController.abort();});
+userInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
+userInput.addEventListener('input',()=>{
+  userInput.style.height='auto'; userInput.style.height=Math.min(userInput.scrollHeight,150)+'px'; updateTokenCount();
+});
+function updateSendBtn(){ sendBtn.disabled=!provider||!model||isLoading||!apiKeyInput.value.trim(); }
+function updateTokenCount(){ const est=Math.round(userInput.value.length/4); tokenCount.textContent=`~${est.toLocaleString()} tokens`; tokenCount.className=est>3000?'warn':''; }
+function setStatus(s){ statusDot.className='status-dot'+(s?' '+s:''); }
+
+async function sendMessage(){
+  const text=userInput.value.trim(), key=apiKeyInput.value.trim();
+  if(!text||!provider||!model||isLoading||!key) return;
+  if(emptyState.parentNode) emptyState.remove();
+  const isFirst=!currentSessionId;
+  if(isFirst){
+    const r=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,model,system_prompt:sysPromptInput.value})});
+    currentSessionId=(await r.json()).id;
+  }
+  history.push({role:'user',content:text});
+  const{wrap:uw}=renderMessage('user',text,{});
+  messagesEl.appendChild(uw);
+  userInput.value=''; userInput.style.height='auto'; updateTokenCount();
+  uw.scrollIntoView({behavior:'smooth',block:'end'});
+  isLoading=true; updateSendBtn();
+  sendBtn.style.display='none'; stopBtn.style.display='flex';
+  abortController=new AbortController();
+  const typingEl=addTypingIndicator(messagesEl);
+  let assistantBubble=null, thinkingBodyEl=null, thinkingBlock=null, timeChip=null;
+  let fullText='';
+  const badge=makeBadge(provider,model);
+  const startTime=Date.now();
+
+  try{
+    fullText=await PROVIDERS[provider].chat(model,history,sysPromptInput.value,key,(chunk,thinking)=>{
+      if(!assistantBubble){
+        typingEl.remove();
+        const r=renderMessage('assistant',chunk,{badge});
+        assistantBubble=r.bubble; thinkingBodyEl=r.thinkingBodyEl;
+        thinkingBlock=r.thinkingBlock; timeChip=r.timeChip;
+        messagesEl.appendChild(r.wrap);
+      } else {
+        assistantBubble.innerHTML=formatContent(chunk);
+      }
+      // Update thinking block live
+      if(thinking&&thinkingBlock){
+        thinkingBlock.style.display='block';
+        thinkingBodyEl.textContent=thinking;
+        thinkingBlock.querySelector('.th-len').textContent=`${thinking.length} chars`;
+      }
+      messagesEl.lastElementChild?.scrollIntoView({behavior:'smooth',block:'end'});
+    },abortController.signal);
+
+    if(!assistantBubble){
+      typingEl.remove();
+      const r=renderMessage('assistant',fullText||'(empty)',{badge});
+      assistantBubble=r.bubble; thinkingBodyEl=r.thinkingBodyEl;
+      thinkingBlock=r.thinkingBlock; timeChip=r.timeChip;
+      messagesEl.appendChild(r.wrap);
+    }
+    // Set elapsed time
+    const elapsed=((Date.now()-startTime)/1000).toFixed(1);
+    if(timeChip) timeChip.textContent=`${elapsed}s`;
+
+    history.push({role:'assistant',content:fullText});
+    setStatus('connected');
+    const pairs=[['user',text,'',''],[  'assistant',fullText,provider,model]];
+    const patchBody={pairs}; if(isFirst) patchBody.title=text.slice(0,80);
+    await fetch(`/api/sessions/${currentSessionId}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(patchBody)});
+    loadSessionList();
+  }catch(e){
+    typingEl.remove();
+    if(e.name==='AbortError'){
+      const elapsed=((Date.now()-startTime)/1000).toFixed(1);
+      if(timeChip) timeChip.textContent=`${elapsed}s ⏹`;
+      if(fullText&&assistantBubble){
+        history.push({role:'assistant',content:fullText});
+        await fetch(`/api/sessions/${currentSessionId}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pairs:[['user',text,'',''],['assistant',fullText,provider,model]]})});
+        loadSessionList();
+      } else { history.pop(); }
+      showToast('Generation stopped','success');
+    }else{
+      if(!assistantBubble){const r=renderMessage('assistant',`Error: ${e.message}`,{});r.bubble.classList.add('error-bubble');messagesEl.appendChild(r.wrap);}
+      showToast(e.message,'error'); setStatus('error'); history.pop();
+    }
+  }finally{
+    isLoading=false; abortController=null; updateSendBtn();
+    sendBtn.style.display='flex'; stopBtn.style.display='none'; userInput.focus();
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// Render helpers
+// ═══════════════════════════════════════════════════
+function makeBadge(prov,mdl){
+  const label=`${PROVIDERS[prov]?.label||prov} · ${(mdl||'').split('/').pop()}`;
+  return{label,cls:'badge-'+(prov||'unknown')};
+}
+function renderMessage(role,content,{badge,thinking,elapsed}={}){
+  const wrap=document.createElement('div'); wrap.className=`message ${role}`;
+  const avatar=document.createElement('div'); avatar.className='avatar'; avatar.textContent=role==='user'?'🧑':'🤖';
+  const col=document.createElement('div'); col.className='msg-col';
+
+  // Thinking block (assistant only)
+  let thinkingBodyEl=null;
+  if(role==='assistant'){
+    const tb=document.createElement('div'); tb.className='thinking-block';
+    const tog=document.createElement('button'); tog.className='thinking-toggle';
+    tog.innerHTML=`<em class="th-arrow">▶</em><span class="th-label">🧠 Thinking</span><span class="th-len" id=""></span>`;
+    const body=document.createElement('div'); body.className='thinking-body';
+    if(thinking){
+      body.textContent=thinking;
+      tog.querySelector('.th-len').textContent=`${thinking.length} chars`;
+    } else {
+      body.innerHTML='<span class="thinking-streaming">Waiting for thinking…</span>';
+    }
+    tog.addEventListener('click',()=>tog.classList.toggle('open'));
+    tb.appendChild(tog); tb.appendChild(body);
+    tb.style.display='none'; // hidden until we have thinking content
+    col.appendChild(tb);
+    thinkingBodyEl=body;
+  }
+
+  const bubble=document.createElement('div'); bubble.className='bubble'; bubble.innerHTML=formatContent(content);
+  const footer=document.createElement('div'); footer.className='msg-footer';
+  const time=document.createElement('span'); time.className='msg-time';
+  time.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  footer.appendChild(time);
+
+  if(role==='assistant'){
+    // elapsed time chip (filled in after completion)
+    const rt=document.createElement('span'); rt.className='resp-time';
+    rt.textContent=elapsed!=null?`${elapsed}s`:'…';
+    rt.id='resp-time-chip'; // temporary, will be renamed if needed
+    footer.appendChild(rt);
+
+    if(badge){
+      const b=document.createElement('span');
+      b.className=`model-badge ${badge.cls}`;
+      b.innerHTML=`<span class="badge-dot"></span>${escHtml(badge.label)}`;
+      footer.appendChild(b);
+    }
+    const copy=document.createElement('button'); copy.className='copy-btn'; copy.textContent='Copy';
+    copy.addEventListener('click',()=>{
+      navigator.clipboard.writeText(content).then(()=>{copy.textContent='Copied!';copy.classList.add('copied');setTimeout(()=>{copy.textContent='Copy';copy.classList.remove('copied');},2000);});
+    });
+    footer.appendChild(copy);
+  }
+  col.appendChild(bubble); col.appendChild(footer); wrap.appendChild(avatar); wrap.appendChild(col);
+  return{wrap, bubble, thinkingBodyEl,
+    thinkingBlock: col.querySelector('.thinking-block'),
+    timeChip: col.querySelector('#resp-time-chip')};
+}
+
+function addTypingIndicator(container){
+  const wrap=document.createElement('div'); wrap.className='message assistant';
+  const av=document.createElement('div'); av.className='avatar'; av.textContent='🤖';
+  const bub=document.createElement('div'); bub.className='bubble typing-indicator'; bub.innerHTML='<span></span><span></span><span></span>';
+  wrap.appendChild(av); wrap.appendChild(bub); container.appendChild(wrap);
+  wrap.scrollIntoView({behavior:'smooth',block:'end'}); return wrap;
+}
+
+function formatContent(text){
+  let h=escHtml(text);
+  h=h.replace(/```(\w*)\n?([\s\S]*?)```/g,(_,_l,c)=>`<pre><code>${c.trimEnd()}</code></pre>`);
+  h=h.replace(/`([^`]+)`/g,'<code>$1</code>');
+  h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  h=h.split('\n\n').map(p=>`<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+  return h;
+}
+function escHtml(s){ return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ═══════════════════════════════════════════════════
+// ── COMPARE MODE ──
+// ═══════════════════════════════════════════════════
+
+// compare state
+let cmpColumns = [];         // [{provider, model, history:[], abortController, colEl, msgEl}]
+let cmpIsLoading = false;
+let cmpModelsCache = {};     // {provider: [{id,name}]}
+
+cmpInput.addEventListener('input',()=>{
+  cmpInput.style.height='auto'; cmpInput.style.height=Math.min(cmpInput.scrollHeight,150)+'px';
+  const est=Math.round(cmpInput.value.length/4); cmpTokenCount.textContent=`~${est.toLocaleString()} tokens`;
+});
+cmpInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendCompare();}});
+cmpSendBtn.addEventListener('click',sendCompare);
+cmpStopBtn.addEventListener('click',()=>{ cmpColumns.forEach(c=>{if(c.abortController)c.abortController.abort();}); });
+
+function updateCmpSendBtn(){
+  cmpSendBtn.disabled=cmpColumns.length===0||cmpIsLoading||!cmpApiKey.value.trim();
+}
+
+// ── Add model picker ──────────────────────────────
+addModelBtn.addEventListener('click',e=>{ e.stopPropagation(); modelPicker.classList.toggle('open'); if(modelPicker.classList.contains('open')) renderPickerProviders(); });
+document.addEventListener('click',e=>{ if(!document.getElementById('addModelWrap').contains(e.target)) modelPicker.classList.remove('open'); });
+
+function renderPickerProviders(){
+  pickerContent.innerHTML='';
+  Object.entries(PROVIDERS).forEach(([pKey,pCfg])=>{
+    const btn=document.createElement('button'); btn.className='picker-prov-btn';
+    const dot=`<span style="width:8px;height:8px;border-radius:50%;background:${PROVIDER_COLORS[pKey]||'#888'};display:inline-block;margin-right:7px;"></span>`;
+    btn.innerHTML=`${dot}${pCfg.label}<span class="prov-arrow">▶</span>`;
+    btn.addEventListener('click',()=>togglePickerModels(pKey,btn));
+    pickerContent.appendChild(btn);
+    const modelsDiv=document.createElement('div'); modelsDiv.className='picker-models'; modelsDiv.id=`picker-models-${pKey}`;
+    pickerContent.appendChild(modelsDiv);
+  });
+}
+
+async function togglePickerModels(pKey,btn){
+  const div=document.getElementById(`picker-models-${pKey}`);
+  const wasOpen=div.classList.contains('open');
+  document.querySelectorAll('.picker-models').forEach(d=>d.classList.remove('open'));
+  if(wasOpen) return;
+  div.classList.add('open');
+  if(cmpModelsCache[pKey]){ renderPickerModels(pKey,cmpModelsCache[pKey]); return; }
+  div.innerHTML='<div class="picker-loading">Loading…</div>';
+  const key=cmpApiKey.value.trim()||apiKeyInput.value.trim();
+  if(!key){ div.innerHTML='<div class="picker-loading">Enter API key first</div>'; return; }
+  try{
+    const res=await fetch(`/api/models/${pKey}`,{headers:{'X-Api-Key':key}});
+    if(!res.ok) throw new Error(await errorText(res));
+    const models=PROVIDERS[pKey].parseModels(await res.json());
+    cmpModelsCache[pKey]=models;
+    renderPickerModels(pKey,models);
+  }catch(e){ div.innerHTML=`<div class="picker-loading" style="color:var(--error)">${e.message}</div>`; }
+}
+
+function renderPickerModels(pKey,models){
+  const div=document.getElementById(`picker-models-${pKey}`);
+  div.innerHTML='';
+  models.forEach(m=>{
+    const alreadyAdded=cmpColumns.some(c=>c.provider===pKey&&c.model===m.id);
+    const btn=document.createElement('button'); btn.className='picker-model-btn';
+    btn.textContent=m.name; btn.disabled=alreadyAdded||cmpColumns.length>=4;
+    if(alreadyAdded) btn.textContent+=' ✓';
+    btn.addEventListener('click',()=>{ addCompareColumn(pKey,m.id,m.name); modelPicker.classList.remove('open'); });
+    div.appendChild(btn);
+  });
+}
+
+// ── Columns ──────────────────────────────────────
+function addCompareColumn(prov,mdlId,mdlName){
+  if(cmpColumns.length>=4){ showToast('Max 4 columns','error'); return; }
+  if(cmpColumns.some(c=>c.provider===prov&&c.model===mdlId)){ showToast('Already added','error'); return; }
+
+  // pill
+  const pill=document.createElement('div');
+  pill.className=`model-pill pill-${prov}`;
+  pill.innerHTML=`<span class="pill-dot"></span>${PROVIDERS[prov]?.label} · ${mdlName.split('/').pop()}<button class="pill-remove" title="Remove">×</button>`;
+  pill.querySelector('.pill-remove').addEventListener('click',()=>removeCompareColumn(prov,mdlId));
+  cmpPills.appendChild(pill);
+
+  // column
+  const colEl=document.createElement('div'); colEl.className='compare-col'; colEl.dataset.key=`${prov}::${mdlId}`;
+  const color=PROVIDER_COLORS[prov]||'#888';
+  colEl.innerHTML=`
+    <div class="col-header">
+      <span class="col-provider-dot" style="background:${color}"></span>
+      <div class="col-info">
+        <div class="col-provider-name" style="color:${color}">${PROVIDERS[prov]?.label}</div>
+        <div class="col-model-name">${mdlName}</div>
+      </div>
+      <span class="col-status" id="col-status-${prov}-${mdlId.replace(/\W/g,'_')}">Ready</span>
+      <button class="col-copy-all" title="Copy all responses" data-key="${prov}::${mdlId}">Copy</button>
+    </div>
+    <div class="col-messages" id="col-msgs-${prov}-${mdlId.replace(/\W/g,'_')}">
+      <div class="cmp-empty">No messages yet</div>
+    </div>`;
+  colEl.querySelector('.col-copy-all').addEventListener('click',()=>{
+    const col=cmpColumns.find(c=>c.provider===prov&&c.model===mdlId);
+    if(!col) return;
+    const text=col.history.filter(m=>m.role==='assistant').map(m=>m.content).join('\n\n---\n\n');
+    navigator.clipboard.writeText(text).then(()=>showToast('Copied all responses','success'));
+  });
+
+  if(noColumnsMsg.parentNode===compareGrid) noColumnsMsg.remove();
+  compareGrid.appendChild(colEl);
+
+  const state={provider:prov,model:mdlId,modelName:mdlName,history:[],abortController:null,
+    colEl,msgEl:document.getElementById(`col-msgs-${prov}-${mdlId.replace(/\W/g,'_')}`),
+    statusEl:document.getElementById(`col-status-${prov}-${mdlId.replace(/\W/g,'_')}`),
+    pillEl:pill};
+  cmpColumns.push(state);
+  updateCmpSendBtn();
+  cmpStatus.textContent=`${cmpColumns.length} model${cmpColumns.length>1?'s':''} selected`;
+}
+
+function removeCompareColumn(prov,mdlId){
+  const idx=cmpColumns.findIndex(c=>c.provider===prov&&c.model===mdlId);
+  if(idx<0) return;
+  const col=cmpColumns[idx];
+  col.pillEl.remove(); col.colEl.remove();
+  cmpColumns.splice(idx,1);
+  if(!cmpColumns.length){ compareGrid.appendChild(noColumnsMsg); cmpStatus.textContent='Add models above to begin comparing'; }
+  else{ cmpStatus.textContent=`${cmpColumns.length} model${cmpColumns.length>1?'s':''} selected`; }
+  updateCmpSendBtn();
+  // re-enable in picker
+  cmpModelsCache[prov]&&renderPickerModels(prov,cmpModelsCache[prov]);
+}
+
+// ── Send compare ─────────────────────────────────
+async function sendCompare(){
+  const text=cmpInput.value.trim(), key=cmpApiKey.value.trim();
+  if(!text||!cmpColumns.length||cmpIsLoading||!key) return;
+
+  // render user message in each column
+  cmpColumns.forEach(col=>{
+    col.history.push({role:'user',content:text});
+    appendCmpMsg(col.msgEl,'user',text);
+    col.statusEl.textContent='Waiting…'; col.statusEl.className='col-status streaming';
+  });
+  cmpInput.value=''; cmpInput.style.height='auto';
+  cmpIsLoading=true; updateCmpSendBtn();
+  cmpSendBtn.style.display='none'; cmpStopBtn.style.display='flex';
+  cmpStatus.textContent='Streaming…';
+
+  const sysPrompt=cmpSysPrompt.value.trim();
+  const startAll=Date.now();
+
+  await Promise.allSettled(cmpColumns.map(async col=>{
+    col.abortController=new AbortController();
+    const start=Date.now();
+    const typing=addCmpTyping(col.msgEl);
+    let bubble=null, full='';
+    try{
+      full=await PROVIDERS[col.provider].chat(col.model,col.history,sysPrompt,key,(chunk,_thinking)=>{
+        if(!bubble){typing.remove();bubble=appendCmpMsg(col.msgEl,'assistant',chunk);}
+        else{bubble.innerHTML=formatContent(chunk);}
+        col.msgEl.scrollTop=col.msgEl.scrollHeight;
+      },col.abortController.signal);
+      if(!bubble){typing.remove();bubble=appendCmpMsg(col.msgEl,'assistant',full||'(empty)');}
+      col.history.push({role:'assistant',content:full});
+      const elapsed=((Date.now()-start)/1000).toFixed(1);
+      col.statusEl.textContent=`✓ ${elapsed}s`; col.statusEl.className='col-status done';
+    }catch(e){
+      typing.remove();
+      if(e.name==='AbortError'){col.statusEl.textContent='Stopped'; col.statusEl.className='col-status';}
+      else{
+        if(!bubble) appendCmpMsg(col.msgEl,'assistant',`Error: ${e.message}`,true);
+        col.statusEl.textContent='Error'; col.statusEl.className='col-status error';
+      }
+    }finally{ col.abortController=null; }
+  }));
+
+  // save compare session
+  try{
+    const r=await fetch('/api/sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({provider:cmpColumns.map(c=>c.provider).join(','),model:cmpColumns.map(c=>c.model).join(','),is_compare:true,
+        title:text.slice(0,80)})});
+    const sid=(await r.json()).id;
+    const pairs=[];
+    cmpColumns.forEach(col=>{
+      col.history.forEach(m=>pairs.push([m.role,m.content,col.provider,col.model]));
+    });
+    await fetch(`/api/sessions/${sid}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pairs,title:text.slice(0,80)})});
+    loadSessionList();
+  }catch{}
+
+  cmpIsLoading=false; updateCmpSendBtn();
+  cmpSendBtn.style.display='flex'; cmpStopBtn.style.display='none';
+  const elapsed=((Date.now()-startAll)/1000).toFixed(1);
+  cmpStatus.textContent=`Done in ${elapsed}s · ${cmpColumns.length} model${cmpColumns.length>1?'s':''}`;
+}
+
+function appendCmpMsg(container,role,content,isError=false){
+  const existing=container.querySelector('.cmp-empty');
+  if(existing) existing.remove();
+  const wrap=document.createElement('div'); wrap.className=`cmp-msg ${role}`;
+  const bubble=document.createElement('div'); bubble.className='bubble'+(isError?' error-bubble':'');
+  bubble.innerHTML=formatContent(content);
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  container.scrollTop=container.scrollHeight;
+  return bubble;
+}
+
+function addCmpTyping(container){
+  const existing=container.querySelector('.cmp-empty');
+  if(existing) existing.remove();
+  const wrap=document.createElement('div'); wrap.className='cmp-msg assistant';
+  const bub=document.createElement('div'); bub.className='bubble typing-indicator';
+  bub.innerHTML='<span></span><span></span><span></span>';
+  wrap.appendChild(bub); container.appendChild(wrap);
+  container.scrollTop=container.scrollHeight;
+  return wrap;
+}
+
+// ── Load compare session ──────────────────────────
+async function loadCompareSession(sessionId){
+  try{
+    const data=await fetch(`/api/sessions/${sessionId}`).then(r=>r.json());
+    const{session,messages}=data;
+    // enter compare mode
+    if(!compareMode){compareMode=true;compareToggle.classList.add('active');compareToggle.textContent='✕ Exit Compare';appBody.classList.add('compare-active');compareView.classList.add('active');cmpApiKey.value=apiKeyInput.value;}
+    // clear existing columns
+    [...cmpColumns].forEach(c=>removeCompareColumn(c.provider,c.model));
+    // figure out which provider/model combos exist
+    const combos=new Map();
+    messages.forEach(m=>{
+      if(m.provider&&m.model){
+        const k=`${m.provider}::${m.model}`;
+        if(!combos.has(k)) combos.set(k,{provider:m.provider,model:m.model,msgs:[]});
+        combos.get(k).msgs.push(m);
+      }
+    });
+    for(const[,c] of combos){
+      if(cmpColumns.length<4){
+        addCompareColumn(c.provider,c.model,c.model);
+        const col=cmpColumns[cmpColumns.length-1];
+        col.history=c.msgs.map(m=>({role:m.role,content:m.content}));
+        // render historical messages
+        const existing=col.msgEl.querySelector('.cmp-empty');
+        if(existing) existing.remove();
+        c.msgs.forEach(m=>appendCmpMsg(col.msgEl,m.role,m.content));
+      }
+    }
+    document.querySelectorAll('.session-item').forEach(el=>el.classList.toggle('active',el.dataset.id===sessionId));
+    if(window.innerWidth<=680){sidebar.classList.remove('open');sidebarBackdrop.classList.remove('open');}
+  }catch(e){showToast(`Could not load compare session: ${e.message}`,'error');}
+}
+
+// ═══════════════════════════════════════════════════
+// Modal / Toast / Helpers
+// ═══════════════════════════════════════════════════
+function confirmDialog(title,body,onConfirm){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalBody').textContent=body;
+  const overlay=document.getElementById('modalOverlay'); overlay.classList.add('open');
+  function close(){overlay.classList.remove('open');}
+  document.getElementById('modalCancel').onclick=close;
+  document.getElementById('modalConfirm').onclick=()=>{close();onConfirm();};
+}
+
+let toastTimer;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show'+(type?' '+type:'');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{t.className='';},4000);
+}
+
+function relativeTime(iso){
+  if(!iso) return '';
+  const diff=Date.now()-new Date(iso).getTime();
+  const mins=Math.floor(diff/60000);
+  if(mins<1) return 'just now';
+  if(mins<60) return `${mins}m ago`;
+  const hrs=Math.floor(mins/60);
+  if(hrs<24) return `${hrs}h ago`;
+  return `${Math.floor(hrs/24)}d ago`;
+}
+</script>
+</body>
+</html>
