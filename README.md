@@ -110,6 +110,8 @@ User types prompt → [Browser]
 | Chat history | All sessions saved locally in SQLite — searchable sidebar |
 | System prompt | Per-session system prompt support |
 | Copy & stop | Copy any response · Stop generation mid-stream |
+| Background mode | Run server with no terminal window — choose at launch |
+| ⏹ Stop Server | Shut down the server from within the browser UI |
 
 ---
 
@@ -135,6 +137,7 @@ User types prompt → [Browser]
 That's it. The script will:
 - Create a Python virtual environment automatically
 - Install the two required packages (`flask`, `requests`)
+- Ask whether to run in **foreground** (terminal stays open) or **background** (no terminal window)
 - Start the server and open your browser at http://localhost:8080
 
 **First time only:** enter your proxy API key in the API Key field. The key is saved in your browser session only — it is never written to disk or sent anywhere except `localhost:6655`.
@@ -204,6 +207,17 @@ Then open **http://localhost:8080** in your browser.
 - For models that expose reasoning (Anthropic extended thinking, OpenAI o1/o3, DeepSeek-R1):  
   a **🧠 Thinking** section appears above the response — click to expand/collapse
 
+### Starting the server
+When you run `start.bat` (Windows) or `start.sh` (Mac/Linux) you are asked:
+
+```
+[F] Foreground  - keep terminal open  (default, press Enter)
+[B] Background  - no terminal window  (stop via browser)
+```
+
+- **Foreground** — the terminal stays open; press **Ctrl+C** to stop.
+- **Background** — no terminal window is needed; use the **⏹ Stop Server** button in the browser header to shut it down cleanly.
+
 ---
 
 ## Project Structure
@@ -237,7 +251,8 @@ All requests go through `http://localhost:6655` — no direct cloud calls are ma
 
 ## Stopping the Server
 
-- Press **Ctrl+C** in the terminal window running `server.py`
+- **From the browser** — click **⏹ Stop Server** in the header (works in both foreground and background mode)
+- **From the terminal** — press **Ctrl+C** in the terminal running `server.py` (foreground mode only)
 - Or close the terminal
 
 ---
